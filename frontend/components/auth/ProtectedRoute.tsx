@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/store'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
@@ -10,15 +11,21 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading } = useAuthStore()
+  const router = useRouter()
 
   useEffect(() => {
-    // If not loading and not authenticated, redirect to IdP
-    if (!isLoading && !isAuthenticated) {
-      const idpUrl = process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080'
-      window.location.href = idpUrl
+    // If we're on the home page, don't do anything
+    if (window.location.pathname === '/') {
+      return;
     }
-  }, [isAuthenticated, isLoading])
 
+    // If we're not loading and not authenticated, redirect to home
+    if (!isLoading && !isAuthenticated) {
+      router.push('/')
+    }
+  }, [isAuthenticated, isLoading, router])
+
+  // Show loading state
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -27,16 +34,18 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
+  // If not authenticated, show a message while redirecting
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <LoadingSpinner size="lg" />
-          <p className="mt-4 text-muted-foreground">Redirecting to sign in...</p>
+          <p className="mt-4 text-muted-foreground">Redirecting to home page...</p>
         </div>
       </div>
     )
   }
 
+  // If authenticated, render children
   return <>{children}</>
 }

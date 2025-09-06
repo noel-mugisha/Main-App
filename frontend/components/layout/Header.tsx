@@ -18,10 +18,8 @@ import { getInitials, getRoleColor } from '@/lib/utils'
 
 export function Header() {
   const { user, logout } = useAuthStore()
-  const router = useRouter()
   const handleLogout = () => {
     logout()
-    router.push('/')
   }
 
   if (!user) return null
