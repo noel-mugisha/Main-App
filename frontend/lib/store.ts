@@ -13,7 +13,7 @@ export interface AuthState {
   user: User | null
   isAuthenticated: boolean
   isLoading: boolean
-  setUser: (user: User | null) => void
+  setUser: (user: User | any) => void
   setLoading: (loading: boolean) => void
   logout: () => void
 }
@@ -26,15 +26,16 @@ export const useAuthStore = create<AuthState>()(
       isLoading: true,
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       setLoading: (isLoading) => set({ isLoading }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => {
+        localStorage.removeItem('access_token');
+        set({ user: null, isAuthenticated: false });
+      },
     }),
     {
-      name: 'auth-storage',
-      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      name: 'auth-storage', 
     }
   )
 )
-
 // Project and Task stores
 export interface Project {
   id: number

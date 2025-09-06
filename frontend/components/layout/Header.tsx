@@ -4,6 +4,7 @@ import { useAuthStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { useRouter } from 'next/navigation'
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -17,11 +18,10 @@ import { getInitials, getRoleColor } from '@/lib/utils'
 
 export function Header() {
   const { user, logout } = useAuthStore()
-
+  const router = useRouter()
   const handleLogout = () => {
     logout()
-    localStorage.removeItem('access_token')
-    window.location.href = process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080'
+    router.push('/')
   }
 
   if (!user) return null
