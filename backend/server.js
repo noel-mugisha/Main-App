@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const { verifyJwt, jwtErrorHandler } = require('./middleware/auth');
+const { verifyJwt, jwtErrorHandler, normalizeRole } = require('./middleware/auth');
 
 // Import routes
 const projectRoutes = require('./routes/projects');
@@ -55,9 +55,9 @@ app.get('/health', (req, res) => {
 });
 
 // API routes with JWT verification
-app.use('/api/projects', verifyJwt, projectRoutes);
-app.use('/api/tasks', verifyJwt, taskRoutes);
-app.use('/api/admin', verifyJwt, adminRoutes);
+app.use('/api/projects', verifyJwt, normalizeRole, projectRoutes);
+app.use('/api/tasks', verifyJwt, normalizeRole, taskRoutes);
+app.use('/api/admin', verifyJwt, normalizeRole, adminRoutes);
 
 // JWT error handling middleware
 app.use(jwtErrorHandler);
