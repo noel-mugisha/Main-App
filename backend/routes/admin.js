@@ -5,6 +5,13 @@ const { requireAdmin } = require('../middleware/auth');
 const router = express.Router();
 const prisma = new PrismaClient();
 
+// Helper function to safely convert BigInt to Number for JSON serialization
+function serializeBigInt(obj) {
+  return JSON.parse(JSON.stringify(obj, (key, value) =>
+    typeof value === 'bigint' ? Number(value) : value
+  ));
+}
+
 // GET /api/admin/users - List all users (Admin only)
 // GET /api/admin/users - List all users (Admin only)
 router.get('/users', requireAdmin, async (req, res) => {
@@ -23,52 +30,89 @@ router.get('/users', requireAdmin, async (req, res) => {
       });
     }
 
-    if (role && ['USER', 'MANAGER', 'ADMIN'].includes(role)) {
-      filterConditions.push({
-        role: role,
+    // Build the base query
+    const queryParams = [];
+    const whereClauses = [];
+    let paramIndex = 1;
+    
+    if (search) {
+      whereClauses.push(`email ILIKE $${paramIndex++}`);
+      queryParams.push(`%${search}%`);
+    }
+    
+    if (role && ['USER', 'MANAGER', 'ADMIN'].includes(role.toUpperCase())) {
+      // Use explicit casting in the SQL query
+      whereClauses.push(`role::text = $${paramIndex++}`);
+      queryParams.push(role.toUpperCase());
+    }
+    
+    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    
+    try {
+      // Fetch users with counts using raw SQL
+      const usersQuery = `
+        SELECT 
+          u.id, 
+          u.email, 
+          u.role, 
+          u."email_verified" as "emailVerified", 
+          u.created_at as "createdAt",
+          (SELECT COUNT(*) FROM "Project" p WHERE p."managerId" = u.id) as "projectsOwnedCount",
+          (SELECT COUNT(*) FROM "Task" t WHERE t."assigneeId" = u.id) as "tasksAssignedCount"
+        FROM "users" u
+        ${whereClause}
+        ORDER BY u.created_at DESC
+        LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+      `;
+      
+      // Count query
+      const countQuery = `
+        SELECT COUNT(*) as count 
+        FROM "users" u
+        ${whereClause}
+      `;
+      
+      // Execute both queries in parallel
+      const [usersResult, countResult] = await Promise.all([
+        prisma.$queryRawUnsafe(usersQuery, ...queryParams, parseInt(limit), skip),
+        prisma.$queryRawUnsafe(countQuery, ...queryParams)
+      ]);
+      
+      // Transform the results to match the expected format
+      users = usersResult.map(user => ({
+        ...user,
+        _count: {
+          projectsOwned: Number(user.projectsOwnedCount),
+          tasksAssigned: Number(user.tasksAssignedCount)
+        }
+      }));
+      
+      totalCount = Number(countResult[0].count);
+      
+    } catch (error) {
+      console.error('Database query error:', {
+        error: error.message,
+        stack: error.stack,
+        query: { whereClause, queryParams, limit: parseInt(limit), skip }
       });
+      throw error;
     }
 
-    
-    const where = filterConditions.length > 0 ? { AND: filterConditions } : {};
-                                                    
-    const [users, totalCount] = await Promise.all([
-      prisma.user.findMany({
-        where, 
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          emailVerified: true,
-          createdAt: true,
-          _count: {
-            select: {
-              projectsOwned: true,
-              tasksAssigned: true
-            }
-          }
-        },
-        skip,
-        take: parseInt(limit),
-        orderBy: {
-          createdAt: 'desc'
-        }
-      }),
-      prisma.user.count({ where })
-    ]);
-
-    res.json({
+    // Convert BigInt to Number before sending response
+    const response = {
       success: true,
       data: {
-        users,
+        users: serializeBigInt(users),
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total: totalCount,
-          pages: Math.ceil(totalCount / parseInt(limit))
+          total: Number(totalCount),
+          pages: Math.ceil(Number(totalCount) / parseInt(limit))
         }
       }
-    });
+    };
+    
+    res.json(response);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({
