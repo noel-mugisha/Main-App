@@ -1,15 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-// =========================================================================
-// CHANGE #1: Import the secure `api` client
-// =========================================================================
+
 import api from '@/lib/api'
 import { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime, getRoleColor } from '@/lib/utils'
@@ -48,16 +46,28 @@ const secureAdminUsersFetcher = (url: string) => api.get(url).then(res => res.da
 
 export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
+  // Debounce search input
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 500) // 500ms delay
+
+    return () => {
+      clearTimeout(timerId)
+    }
+  }, [searchTerm])
+
   // =========================================================================
   // CHANGE #3: Update useSWR to use the secure fetcher and the correct API path
   // =========================================================================
   const { data: usersData, error, mutate } = useSWR<UsersApiResponse>(
-    `/api/admin/users?page=${currentPage}&limit=10&search=${searchTerm}&role=${roleFilter}`,
+    `/api/admin/users?page=${currentPage}&limit=10&search=${debouncedSearchTerm}&role=${roleFilter}`,
     secureAdminUsersFetcher
   )
 
@@ -83,11 +93,12 @@ export default function AdminPage() {
 
   const handleSearch = (value: string) => {
     setSearchTerm(value)
-    setCurrentPage(1)
+    // Don't reset page here to avoid race condition with debounce
   }
 
   const handleRoleFilter = (value: string) => {
     setRoleFilter(value)
+    // Reset to first page when changing filters
     setCurrentPage(1)
   }
 
