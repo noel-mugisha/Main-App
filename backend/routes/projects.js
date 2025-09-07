@@ -117,6 +117,48 @@ router.get('/', async (req, res) => {
   }
 });
 
+// IMPORTANT: Place this BEFORE "/:id" to avoid being shadowed by the dynamic route
+router.get('/assignable-users', async (req, res) => {
+  // ADD a manual role check here for clarity and security
+  if (req.auth.role !== 'MANAGER' && req.auth.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'You do not have permission to access this resource.'
+    });
+  }
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        // We only want users who can perform work, not other managers or admins
+        role: 'USER'
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true
+      },
+      orderBy: {
+        email: 'asc'
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        users: users 
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching assignable users:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch assignable users',
+      message: error.message
+    });
+  }
+});
+
 // GET /api/projects/:id - Get a single project
 router.get('/:id', async (req, res) => {
   try {
@@ -354,46 +396,7 @@ router.delete('/:id', requireManagerOrAdmin, async (req, res) => {
   }
 });
 
-router.get('/assignable-users', async (req, res) => {
-  // ADD a manual role check here for clarity and security
-  if (req.auth.role !== 'MANAGER' && req.auth.role !== 'ADMIN') {
-    return res.status(403).json({
-      success: false,
-      error: 'Forbidden',
-      message: 'You do not have permission to access this resource.'
-    });
-  }
-  try {
-    const users = await prisma.user.findMany({
-      where: {
-        // We only want users who can perform work, not other managers or admins
-        role: 'USER'
-      },
-      select: {
-        id: true,
-        email: true,
-        role: true
-      },
-      orderBy: {
-        email: 'asc'
-      }
-    });
-
-    res.json({
-      success: true,
-      data: {
-        users: users 
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching assignable users:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch assignable users',
-      message: error.message
-    });
-  }
-});
+// moved above
 
 module.exports = router;
 
