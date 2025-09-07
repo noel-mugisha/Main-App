@@ -6,34 +6,40 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // GET /api/admin/users - List all users (Admin only)
+// GET /api/admin/users - List all users (Admin only)
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '', role = '' } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Build where clause for filtering
-    const where = {};
-    
+    const filterConditions = [];
+
     if (search) {
-      where.email = {
-        contains: search,
-        mode: 'insensitive'
-      };
-    }
-    
-    if (role && ['USER', 'MANAGER', 'ADMIN'].includes(role)) {
-      where.role = role;
+      filterConditions.push({
+        email: {
+          contains: search,
+          mode: 'insensitive',
+        },
+      });
     }
 
+    if (role && ['USER', 'MANAGER', 'ADMIN'].includes(role)) {
+      filterConditions.push({
+        role: role,
+      });
+    }
+
+    
+    const where = filterConditions.length > 0 ? { AND: filterConditions } : {};
+                                                    
     const [users, totalCount] = await Promise.all([
       prisma.user.findMany({
-        where,
+        where, 
         select: {
           id: true,
           email: true,
           role: true,
           emailVerified: true,
-          linkedinId: true,
           createdAt: true,
           _count: {
             select: {
