@@ -16,7 +16,7 @@ model User {
   id              Int       @id @default(autoincrement())
   email           String    @unique
   password        String?
-  role            Role      // Role enum defined below
+  role            String
   emailVerified   Boolean   @default(false) @map("email_verified")
   linkedinId      String?   @unique @map("linkedin_id")
   otp             String?

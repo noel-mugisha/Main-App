@@ -122,8 +122,11 @@ router.get('/assignable-users', requireManagerOrAdmin, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
       where: {
-        // We only want users who can perform work, not other managers or admins
-        role: 'USER'
+        // Accept either plain USER or prefixed ROLE_USER (case-insensitive)
+        role: {
+          contains: 'USER',
+          mode: 'insensitive'
+        }
       },
       select: {
         id: true,
