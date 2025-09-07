@@ -18,9 +18,11 @@ export default function AuthCallbackClient() {
   useEffect(() => {
     const handleLogin = async () => {
       const accessToken = searchParams.get('access_token')
+      const refreshToken = searchParams.get('refresh_token')
 
-      if (accessToken) {
-        localStorage.setItem('access_token', accessToken)
+      if (accessToken && refreshToken) {
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken)
 
         try {
           const payload = JSON.parse(atob(accessToken.split('.')[1]))

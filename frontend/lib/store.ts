@@ -28,12 +28,12 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (isLoading) => set({ isLoading }),
       logout: () => {
         localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
         set({ user: null, isAuthenticated: false });
-        // Redirect to home page after logout
         if (typeof window !== 'undefined') {
-          window.location.href = '/';
+            window.location.href = '/';
         }
-      },
+    },
     }),
     {
       name: 'auth-storage', 
