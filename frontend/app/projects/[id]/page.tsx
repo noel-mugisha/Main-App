@@ -293,6 +293,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
             isOpen={isCreateTaskOpen}
             onClose={() => setIsCreateTaskOpen(false)}
             onSubmit={handleTaskCreate}
+            projectId={parseInt(params.id)}
           />
 
           <TaskStatusDialog

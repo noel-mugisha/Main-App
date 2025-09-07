@@ -354,21 +354,181 @@ router.delete('/:id', requireManagerOrAdmin, async (req, res) => {
   }
 });
 
-router.get('/assignable-users', async (req, res) => {
-  // ADD a manual role check here for clarity and security
-  if (req.auth.role !== 'MANAGER' && req.auth.role !== 'ADMIN') {
-    return res.status(403).json({
+// Helper to check if user is manager or admin
+const isManagerOrAdmin = (user) => {
+  return user && (user.role === 'MANAGER' || user.role === 'ADMIN');
+};
+
+// Create a new task in a project
+router.post('/:projectId/tasks', requireManagerOrAdmin, async (req, res) => {
+  const { projectId } = req.params;
+  const { title, assigneeId } = req.body;
+  const numericProjectId = parseInt(projectId);
+  const numericAssigneeId = assigneeId ? parseInt(assigneeId) : null;
+
+  try {
+    // Validate project ID
+    if (!projectId || isNaN(numericProjectId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid project ID',
+        message: 'A valid project ID is required to create a task'
+      });
+    }
+
+    // Validate title
+    if (!title || typeof title !== 'string' || title.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid task title',
+        message: 'Task title must be at least 3 characters long'
+      });
+    }
+
+    // Verify project exists and user has access to it
+    const project = await prisma.project.findUnique({
+      where: { id: numericProjectId },
+      select: { id: true, managerId: true }
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        message: `Project with ID ${projectId} does not exist`
+      });
+    }
+
+    // If assignee ID is provided, verify the user exists and is a regular user
+    if (numericAssigneeId) {
+      // First get the user
+      const assignee = await prisma.user.findUnique({
+        where: { id: numericAssigneeId },
+        select: { 
+          id: true,
+          role: true 
+        }
+      });
+      
+      // Then check the role in JavaScript
+      if (!assignee || assignee.role !== 'USER') {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid assignee',
+          message: 'The specified assignee does not exist or cannot be assigned tasks'
+        });
+      }
+    }
+
+    console.log('Creating task with data:', {
+      title: title.trim(),
+      projectId: numericProjectId,
+      assigneeId: numericAssigneeId,
+      status: 'TODO'
+    });
+
+    // Create the task
+    const task = await prisma.task.create({
+      data: {
+        title: title.trim(),
+        projectId: numericProjectId,
+        assigneeId: numericAssigneeId,
+        status: 'TODO'
+      },
+      include: {
+        assignee: {
+          select: {
+            id: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    console.log('Task created successfully:', task);
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        task: task
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating task:', {
+      message: error.message,
+      code: error.code,
+      meta: error.meta,
+      stack: error.stack
+    });
+    return res.status(500).json({
       success: false,
-      error: 'Forbidden',
-      message: 'You do not have permission to access this resource.'
+      error: 'Internal server error',
+      message: 'An error occurred while creating the task',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
+});
+
+// Get assignable users for a specific project
+router.get('/:projectId/assignable-users', async (req, res) => {
+  const { projectId } = req.params;
+  const numericProjectId = parseInt(projectId);
+  
+  console.log(`=== /projects/${projectId}/assignable-users endpoint called ===`);
+  
   try {
-    const users = await prisma.user.findMany({
-      where: {
-        // We only want users who can perform work, not other managers or admins
-        role: 'USER'
-      },
+    // Check authentication
+    if (!req.auth) {
+      console.error('No auth object found in request');
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        message: 'No authentication token provided'
+      });
+    }
+    
+    // Check authorization
+    if (!isManagerOrAdmin(req.auth)) {
+      console.error('User is not authorized:', req.auth);
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'You must be a manager or admin to access this resource'
+      });
+    }
+    
+    // Validate project ID
+    if (!projectId || isNaN(numericProjectId)) {
+      console.error('Invalid project ID:', projectId);
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid project ID',
+        message: 'A valid project ID is required to fetch assignable users'
+      });
+    }
+    
+    // First, verify the project exists
+    const project = await prisma.project.findUnique({
+      where: { id: numericProjectId },
+      select: { id: true, managerId: true }
+    });
+    
+    if (!project) {
+      console.error('Project not found:', projectId);
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        message: `Project with ID ${projectId} does not exist`
+      });
+    }
+    
+    // Find all users who can be assigned to tasks in this project
+    // In this schema, any user with role 'USER' can be assigned tasks
+    console.log('Fetching assignable users for project:', projectId);
+    
+    // First, get all users
+    const allUsers = await prisma.user.findMany({
       select: {
         id: true,
         email: true,
@@ -378,13 +538,23 @@ router.get('/assignable-users', async (req, res) => {
         email: 'asc'
       }
     });
-
-    res.json({
+    
+    // Filter to only include users with role 'USER'
+    const users = allUsers.filter(user => user.role === 'USER');
+    
+    console.log('All users:', JSON.stringify(allUsers, null, 2));
+    
+    console.log('Found users:', JSON.stringify(users, null, 2));
+    
+    const response = {
       success: true,
       data: {
-        users: users 
+        users: users
       }
-    });
+    };
+    
+    console.log('Sending response:', JSON.stringify(response, null, 2));
+    res.json(response);
   } catch (error) {
     console.error('Error fetching assignable users:', error);
     res.status(500).json({

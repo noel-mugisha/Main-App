@@ -28,12 +28,49 @@ interface User {
   role: string
 }
 
-const assignableUsersFetcher = (url: string) => api.get(url).then(res => res.data.data.users);
+interface ApiResponse {
+  success: boolean;
+  data: {
+    users: User[];
+  };
+}
 
-export function CreateTaskDialog({ isOpen, onClose, onSubmit }: {
+const assignableUsersFetcher = async (url: string) => {
+  try {
+    console.log('Fetching users from:', url);
+    const response = await api.get(url);
+    console.log('Raw API Response:', response);
+    
+    // Log the complete response structure
+    console.log('Response data structure:', {
+      data: response.data,
+      hasData: !!response.data,
+      hasDataData: !!response.data?.data,
+      hasUsers: !!response.data?.data?.users,
+      isArray: Array.isArray(response.data?.data?.users)
+    });
+    
+    // Handle the response structure from our backend
+    // Our backend returns: { success: true, data: { users: [...] } }
+    const users = response.data?.data?.users || [];
+    
+    console.log('Extracted users:', users);
+    return { data: { users } }; // Return in the expected format for useSWR
+  } catch (error) {
+    throw error;
+  }
+};
+
+export function CreateTaskDialog({ 
+  isOpen, 
+  onClose, 
+  onSubmit,
+  projectId 
+}: {
   isOpen: boolean
   onClose: () => void
   onSubmit: (data: { title: string; assigneeId?: number }) => void
+  projectId: number
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   
@@ -48,20 +85,36 @@ export function CreateTaskDialog({ isOpen, onClose, onSubmit }: {
 
   const watchedTitle = watch('title', '')
 
-  const { data: users, error: usersError } = useSWR<User[]>('/api/projects/assignable-users', assignableUsersFetcher)
-  const isLoadingUsers = !users && !usersError;
+  const { data: usersData, error: usersError, isLoading: isLoadingUsers } = useSWR<{ data: { users: User[] } }>(
+    projectId ? `/api/projects/${projectId}/assignable-users` : null, 
+    assignableUsersFetcher
+  )
+  
+  // Extract users from the response data structure
+  const users = usersData?.data?.users || [];
+  console.log('Rendering users:', users); // Debug log
 
   const handleFormSubmit = async (data: FormData) => {
     setIsSubmitting(true)
     try {
+      console.log('Form data:', data); // Debug log
       const assigneeId = data.assigneeId ? parseInt(data.assigneeId) : undefined;
+      console.log('Submitting with assigneeId:', assigneeId); // Debug log
+      
       await onSubmit({
         title: data.title.trim(),
         assigneeId: assigneeId
-      })
-      reset()
+      });
+      
+      // Reset form after successful submission
+      reset({
+        title: '',
+        assigneeId: ''
+      });
+    } catch (error) {
+      console.error('Error submitting form:', error);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
   }
 
@@ -96,7 +149,10 @@ export function CreateTaskDialog({ isOpen, onClose, onSubmit }: {
 
           <div className="space-y-2">
             <Label htmlFor="assigneeId">Assign To</Label>
-            <Select onValueChange={(value) => setValue('assigneeId', value)}>
+            <Select 
+              value={watch('assigneeId') || ''}
+              onValueChange={(value) => setValue('assigneeId', value, { shouldValidate: true })}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a team member (optional)" />
               </SelectTrigger>
@@ -109,14 +165,19 @@ export function CreateTaskDialog({ isOpen, onClose, onSubmit }: {
                   <SelectGroup>
                     <SelectLabel>Assignable Users</SelectLabel>
                     {/* The `users &&` check ensures we only map when the array exists */}
-                    {users && users.map((user) => (
-                      <SelectItem key={user.id} value={user.id.toString()}>
-                        <div className="flex items-center space-x-2">
-                          <span>{user.email}</span>
-                          {/* The role is not needed here since we only fetched USERs */}
-                        </div>
+                    {users.length > 0 ? (
+                      users.map((user) => (
+                        <SelectItem key={user.id} value={user.id.toString()}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{user.email}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="no-users" disabled className="text-muted-foreground">
+                        No assignable users found
                       </SelectItem>
-                    ))}
+                    )}
                   </SelectGroup>
                 )}
               </SelectContent>
