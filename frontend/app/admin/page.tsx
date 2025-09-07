@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { apiEndpoints } from '@/lib/api'
+import api, { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime, getRoleColor } from '@/lib/utils'
 import { Header } from '@/components/layout/Header'
 import { UserRoleDialog } from '@/components/dialogs/UserRoleDialog'
@@ -27,7 +27,7 @@ interface User {
   }
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const fetcher = (url: string) => api.get(url).then(res => res.data.data);
 
 export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -37,7 +37,7 @@ export default function AdminPage() {
   const [currentPage, setCurrentPage] = useState(1)
 
   const { data: usersData, error, mutate } = useSWR(
-    `/api/backend/admin/users?page=${currentPage}&limit=10&search=${searchTerm}&role=${roleFilter}`,
+    `/api/admin/users?page=${currentPage}&limit=10&search=${searchTerm}&role=${roleFilter}`,
     fetcher
   )
 

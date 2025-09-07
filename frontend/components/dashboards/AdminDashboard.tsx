@@ -6,12 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { apiEndpoints } from '@/lib/api'
+import api, { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime, getRoleColor } from '@/lib/utils'
-import { Users, UserCheck, UserX, Settings, Eye, BarChart3 } from 'lucide-react'
+import { Users, UserCheck, Settings, BarChart3 } from 'lucide-react'
 import { UserRoleDialog } from '@/components/dialogs/UserRoleDialog'
 import Link from 'next/link'
 
+// Define interfaces for our data to ensure type safety
 interface User {
   id: number
   email: string
@@ -32,32 +33,39 @@ interface AdminStats {
   }
   usersByRole: Record<string, number>
   tasksByStatus: Record<string, number>
-  recentActivity: any[]
+  recentActivity: any[] 
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+interface UsersApiResponse {
+  users: User[]
+  pagination: any
+}
+
+// Define secure fetchers that use our authenticated client
+const secureStatsFetcher = (url: string) => api.get(url).then(res => res.data.data);
+const secureUsersFetcher = (url: string) => api.get(url).then(res => res.data.data);
 
 export function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false)
 
-  const { data: usersData, error: usersError, mutate: mutateUsers } = useSWR('/api/backend/admin/users', fetcher)
-  const { data: statsData, error: statsError } = useSWR('/api/backend/admin/stats', fetcher)
+  const { data: usersResponse, error: usersError, mutate: mutateUsers } = useSWR<UsersApiResponse>('/api/admin/users', secureUsersFetcher)
+  const { data: statsData, error: statsError } = useSWR<AdminStats>('/api/admin/stats', secureStatsFetcher)
 
-  const users: User[] = usersData?.data?.users || []
-  const stats: AdminStats = statsData?.data || {
+  const users: User[] = usersResponse?.users || []
+  const stats: AdminStats = statsData || {
     overview: { totalUsers: 0, totalProjects: 0, totalTasks: 0 },
     usersByRole: {},
     tasksByStatus: {},
-    recentActivity: []
+    recentActivity: [] // Ensure recentActivity is always an array
   }
 
-  const isLoading = (!usersData && !usersError) || (!statsData && !statsError)
+  const isLoading = (!usersResponse && !usersError) || (!statsData && !statsError)
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
       await apiEndpoints.updateUserRole(userId, newRole)
-      mutateUsers() // Refresh data
+      mutateUsers()
       setIsRoleDialogOpen(false)
       setSelectedUser(null)
     } catch (error) {
@@ -142,7 +150,7 @@ export function AdminDashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Verified Users</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -150,7 +158,7 @@ export function AdminDashboard() {
               {users.filter(user => user.emailVerified).length}
             </div>
             <p className="text-xs text-muted-foreground">
-              {users.length - users.filter(user => user.emailVerified).length} pending verification
+              of {users.length} total users
             </p>
           </CardContent>
         </Card>
@@ -214,12 +222,12 @@ export function AdminDashboard() {
       </Card>
 
       {/* System Activity */}
-      {stats.recentActivity.length > 0 && (
+      {stats.recentActivity && stats.recentActivity.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>
-              Latest task updates and project changes
+              Latest task updates across the system
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -231,7 +239,7 @@ export function AdminDashboard() {
                       Task "{activity.title}" updated to {activity.status}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Project: {activity.project?.name} • {formatRelativeTime(activity.updatedAt)}
+                      In Project: {activity.project?.name} • By: {activity.assignee?.email || 'System'} • {formatRelativeTime(activity.updatedAt)}
                     </p>
                   </div>
                   <Badge variant="outline">
