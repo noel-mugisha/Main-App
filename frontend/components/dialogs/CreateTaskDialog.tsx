@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import useSWR from 'swr'
 import {
@@ -14,13 +14,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-
-interface CreateTaskDialogProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: (data: { title: string; assigneeId?: number }) => void
-}
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
+import api from '@/lib/api'
 
 interface FormData {
   title: string
@@ -33,9 +28,13 @@ interface User {
   role: string
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const assignableUsersFetcher = (url: string) => api.get(url).then(res => res.data.data.users);
 
-export function CreateTaskDialog({ isOpen, onClose, onSubmit }: CreateTaskDialogProps) {
+export function CreateTaskDialog({ isOpen, onClose, onSubmit }: {
+  isOpen: boolean
+  onClose: () => void
+  onSubmit: (data: { title: string; assigneeId?: number }) => void
+}) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   const {
@@ -49,16 +48,16 @@ export function CreateTaskDialog({ isOpen, onClose, onSubmit }: CreateTaskDialog
 
   const watchedTitle = watch('title', '')
 
-  // Fetch users for assignment
-  const { data: usersData } = useSWR('/api/backend/admin/users?limit=100', fetcher)
-  const users: User[] = usersData?.data?.users || []
+  const { data: users, error: usersError } = useSWR<User[]>('/api/projects/assignable-users', assignableUsersFetcher)
+  const isLoadingUsers = !users && !usersError;
 
   const handleFormSubmit = async (data: FormData) => {
     setIsSubmitting(true)
     try {
+      const assigneeId = data.assigneeId ? parseInt(data.assigneeId) : undefined;
       await onSubmit({
         title: data.title.trim(),
-        assigneeId: data.assigneeId ? parseInt(data.assigneeId) : undefined
+        assigneeId: assigneeId
       })
       reset()
     } finally {
@@ -89,19 +88,10 @@ export function CreateTaskDialog({ isOpen, onClose, onSubmit }: CreateTaskDialog
               placeholder="Enter task title"
               {...register('title', {
                 required: 'Task title is required',
-                minLength: {
-                  value: 3,
-                  message: 'Task title must be at least 3 characters'
-                },
-                maxLength: {
-                  value: 200,
-                  message: 'Task title must be less than 200 characters'
-                }
+                minLength: { value: 3, message: 'Title must be at least 3 characters' }
               })}
             />
-            {errors.title && (
-              <p className="text-sm text-destructive">{errors.title.message}</p>
-            )}
+            {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
           </div>
 
           <div className="space-y-2">
@@ -111,19 +101,28 @@ export function CreateTaskDialog({ isOpen, onClose, onSubmit }: CreateTaskDialog
                 <SelectValue placeholder="Select a team member (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Unassigned</SelectItem>
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id.toString()}>
-                    <div className="flex items-center space-x-2">
-                      <span>{user.email}</span>
-                      <span className="text-xs text-muted-foreground">({user.role})</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {isLoadingUsers ? (
+                  <SelectItem value="loading" disabled>Loading users...</SelectItem>
+                ) : usersError ? (
+                  <SelectItem value="error" disabled>Error loading users</SelectItem>
+                ) : (
+                  <SelectGroup>
+                    <SelectLabel>Assignable Users</SelectLabel>
+                    {/* The `users &&` check ensures we only map when the array exists */}
+                    {users && users.map((user) => (
+                      <SelectItem key={user.id} value={user.id.toString()}>
+                        <div className="flex items-center space-x-2">
+                          <span>{user.email}</span>
+                          {/* The role is not needed here since we only fetched USERs */}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Leave unassigned to assign later
+              Only users with the 'USER' role are shown.
             </p>
           </div>
 

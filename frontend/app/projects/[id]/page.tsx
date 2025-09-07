@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { apiEndpoints } from '@/lib/api'
+import api, { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime, getStatusColor } from '@/lib/utils'
 import { ArrowLeft, Plus, Users, CheckCircle, Clock, Circle, MoreVertical } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
@@ -41,7 +41,7 @@ interface Task {
   updatedAt: string
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const secureFetcher = (url: string) => api.get(url).then(res => res.data.data);
 
 export default function ProjectPage({ params }: { params: { id: string } }) {
   const projectId = parseInt(params.id)
@@ -49,9 +49,9 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
 
-  const { data: projectData, error, mutate } = useSWR(`/api/backend/projects/${projectId}`, fetcher)
+  const { data: projectData, error, mutate } = useSWR(`/api/projects/${projectId}`, secureFetcher)
 
-  const project: Project = projectData?.data
+  const project: Project | undefined = projectData
   const isLoading = !projectData && !error
 
   const handleTaskCreate = async (taskData: { title: string; assigneeId?: number }) => {
@@ -145,155 +145,155 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container mx-auto py-6">
-        <div className="space-y-6">
-          {/* Project Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Link>
+          <div className="space-y-6">
+            {/* Project Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/dashboard">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Link>
+                </Button>
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
+                  {project.description && (
+                    <p className="text-muted-foreground mt-1">{project.description}</p>
+                  )}
+                </div>
+              </div>
+              <Button onClick={() => setIsCreateTaskOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Task
               </Button>
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-                {project.description && (
-                  <p className="text-muted-foreground mt-1">{project.description}</p>
-                )}
-              </div>
             </div>
-            <Button onClick={() => setIsCreateTaskOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Task
-            </Button>
-          </div>
 
-          {/* Project Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-                <Circle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.total}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">To Do</CardTitle>
-                <Circle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.todo}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">In Progress</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.inProgress}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.completed}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stats.completionRate}% complete
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+            {/* Project Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+                  <Circle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.total}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">To Do</CardTitle>
+                  <Circle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.todo}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.inProgress}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Completed</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats.completed}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.completionRate}% complete
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Progress Bar */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Project Progress</span>
-                  <span>{stats.completed}/{stats.total} tasks</span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-2">
-                  <div
-                    className="bg-primary h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${stats.completionRate}%` }}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Tasks List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Tasks</CardTitle>
-              <CardDescription>
-                Manage and track all project tasks
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {project.tasks.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Circle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No tasks yet</h3>
-                    <p className="text-muted-foreground mb-4">
-                      Create your first task to get started with this project.
-                    </p>
-                    <Button onClick={() => setIsCreateTaskOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Task
-                    </Button>
+            {/* Progress Bar */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Project Progress</span>
+                    <span>{stats.completed}/{stats.total} tasks</span>
                   </div>
-                ) : (
-                  project.tasks.map((task) => (
-                    <div key={task.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          {getStatusIcon(task.status)}
-                          <span className="font-medium">{task.title}</span>
-                        </div>
-                        <Badge className={getStatusColor(task.status)}>
-                          {task.status}
-                        </Badge>
-                        {task.assignee && (
-                          <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                            <Users className="h-3 w-3" />
-                            <span>{task.assignee.email}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-muted-foreground">
-                          {formatRelativeTime(task.updatedAt)}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openStatusDialog(task)}
-                        >
-                          Update
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  <div className="w-full bg-secondary rounded-full h-2">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${stats.completionRate}%` }}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <CreateTaskDialog
-          isOpen={isCreateTaskOpen}
-          onClose={() => setIsCreateTaskOpen(false)}
-          onSubmit={handleTaskCreate}
-        />
+            {/* Tasks List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Tasks</CardTitle>
+                <CardDescription>
+                  Manage and track all project tasks
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {project.tasks.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Circle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No tasks yet</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Create your first task to get started with this project.
+                      </p>
+                      <Button onClick={() => setIsCreateTaskOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Task
+                      </Button>
+                    </div>
+                  ) : (
+                    project.tasks.map((task) => (
+                      <div key={task.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
+                            {getStatusIcon(task.status)}
+                            <span className="font-medium">{task.title}</span>
+                          </div>
+                          <Badge className={getStatusColor(task.status)}>
+                            {task.status}
+                          </Badge>
+                          {task.assignee && (
+                            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
+                              <Users className="h-3 w-3" />
+                              <span>{task.assignee.email}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-muted-foreground">
+                            {formatRelativeTime(task.updatedAt)}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openStatusDialog(task)}
+                          >
+                            Update
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <CreateTaskDialog
+            isOpen={isCreateTaskOpen}
+            onClose={() => setIsCreateTaskOpen(false)}
+            onSubmit={handleTaskCreate}
+          />
 
           <TaskStatusDialog
             task={selectedTask}

@@ -14,7 +14,6 @@ router.get('/', async (req, res) => {
     let projects;
 
     if (userRole === 'ADMIN') {
-      // Admin can see all projects
       projects = await prisma.project.findMany({
         include: {
           manager: {
@@ -40,7 +39,6 @@ router.get('/', async (req, res) => {
         }
       });
     } else if (userRole === 'MANAGER') {
-      // Manager can see projects they own
       projects = await prisma.project.findMany({
         where: {
           managerId: userId
@@ -69,7 +67,6 @@ router.get('/', async (req, res) => {
         }
       });
     } else {
-      // Regular users can see projects where they have assigned tasks
       projects = await prisma.project.findMany({
         where: {
           tasks: {
@@ -124,121 +121,57 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const projectId = parseInt(req.params.id);
+    if (isNaN(projectId)) {
+      return res.status(400).json({ success: false, error: 'Invalid project ID.' });
+    }
+
     const userId = req.auth.userId;
     const userRole = req.auth.role;
 
-    let project;
-
-    if (userRole === 'ADMIN') {
-      // Admin can see any project
-      project = await prisma.project.findUnique({
-        where: { id: projectId },
-        include: {
-          manager: {
-            select: {
-              id: true,
-              email: true,
-              role: true
-            }
-          },
-          tasks: {
-            include: {
-              assignee: {
-                select: {
-                  id: true,
-                  email: true
-                }
-              }
-            },
-            orderBy: {
-              createdAt: 'desc'
-            }
-          }
-        }
-      });
-    } else if (userRole === 'MANAGER') {
-      // Manager can see projects they own
-      project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          managerId: userId
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        manager: {
+          select: { id: true, email: true, role: true }
         },
-        include: {
-          manager: {
-            select: {
-              id: true,
-              email: true,
-              role: true
+        tasks: {
+          include: {
+            assignee: {
+              select: { id: true, email: true }
             }
           },
-          tasks: {
-            include: {
-              assignee: {
-                select: {
-                  id: true,
-                  email: true
-                }
-              }
-            },
-            orderBy: {
-              createdAt: 'desc'
-            }
-          }
+          orderBy: { createdAt: 'desc' }
         }
-      });
-    } else {
-      // Regular users can see projects where they have assigned tasks
-      project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          tasks: {
-            some: {
-              assigneeId: userId
-            }
-          }
-        },
-        include: {
-          manager: {
-            select: {
-              id: true,
-              email: true,
-              role: true
-            }
-          },
-          tasks: {
-            where: {
-              assigneeId: userId
-            },
-            include: {
-              assignee: {
-                select: {
-                  id: true,
-                  email: true
-                }
-              }
-            },
-            orderBy: {
-              createdAt: 'desc'
-            }
-          }
-        }
-      });
-    }
+      }
+    });
 
     if (!project) {
       return res.status(404).json({
         success: false,
         error: 'Project not found',
-        message: 'Project not found or you do not have access to it'
+        message: `No project exists with the ID ${projectId}`
       });
     }
 
+    const isManagerOfProject = project.managerId === userId;
+    const isUserAssignedToTask = project.tasks.some(task => task.assigneeId === userId);
+    
+    const hasAccess = userRole === 'ADMIN' || isManagerOfProject || isUserAssignedToTask;
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'You do not have permission to access this project.'
+      });
+    }
     res.json({
       success: true,
       data: project
     });
+
   } catch (error) {
-    console.error('Error fetching project:', error);
+    console.error(`Error fetching project with ID ${req.params.id}:`, error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch project',
@@ -246,6 +179,7 @@ router.get('/:id', async (req, res) => {
     });
   }
 });
+
 
 // POST /api/projects - Create a new project (Manager/Admin only)
 router.post('/', requireManagerOrAdmin, async (req, res) => {
@@ -415,6 +349,47 @@ router.delete('/:id', requireManagerOrAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to delete project',
+      message: error.message
+    });
+  }
+});
+
+router.get('/assignable-users', async (req, res) => {
+  // ADD a manual role check here for clarity and security
+  if (req.auth.role !== 'MANAGER' && req.auth.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'You do not have permission to access this resource.'
+    });
+  }
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        // We only want users who can perform work, not other managers or admins
+        role: 'USER'
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true
+      },
+      orderBy: {
+        email: 'asc'
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        users: users 
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching assignable users:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch assignable users',
       message: error.message
     });
   }
