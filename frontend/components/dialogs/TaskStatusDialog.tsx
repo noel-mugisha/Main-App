@@ -17,7 +17,7 @@ interface Task {
   id: number
   title: string
   status: 'TODO' | 'IN_PROGRESS' | 'DONE'
-  project: {
+  project?: {
     id: number
     name: string
   }
@@ -82,7 +82,7 @@ export function TaskStatusDialog({ task, isOpen, onClose, onStatusUpdate }: Task
         <DialogHeader>
           <DialogTitle>Update Task Status</DialogTitle>
           <DialogDescription>
-            Update the status for "{task.title}" in project "{task.project.name}"
+            Update the status for "{task.title}"{task.project ? ` in project "${task.project.name}"` : ''}
           </DialogDescription>
         </DialogHeader>
 
