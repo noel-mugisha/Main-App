@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { apiEndpoints } from '@/lib/api'
+import api, { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime } from '@/lib/utils'
 import { Plus, Users, CheckCircle, Clock, Circle, Eye } from 'lucide-react'
 import { CreateProjectDialog } from '@/components/dialogs/CreateProjectDialog'
@@ -38,14 +38,14 @@ interface Task {
   updatedAt: string
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const secureFetcher = (url: string) => api.get(url).then(res => res.data.data);
 
 export function ManagerDashboard() {
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false)
 
-  const { data: projectsData, error, mutate } = useSWR('/api/backend/projects', fetcher)
+  const { data: projectsData, error, mutate } = useSWR<Project[]>('/api/projects', secureFetcher)
 
-  const projects: Project[] = projectsData?.data || []
+  const projects: Project[] = projectsData || []
   const isLoading = !projectsData && !error
 
   const handleProjectCreate = async (projectData: { name: string; description?: string }) => {

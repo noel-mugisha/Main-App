@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { apiEndpoints } from '@/lib/api'
+import api, { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime, getStatusColor } from '@/lib/utils'
 import { CheckCircle, Clock, Circle, Plus } from 'lucide-react'
 import { TaskStatusDialog } from '@/components/dialogs/TaskStatusDialog'
@@ -27,15 +27,15 @@ interface Task {
   updatedAt: string
 }
 
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+const secureFetcher = (url: string) => api.get(url).then(res => res.data.data);
 
 export function UserDashboard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
 
-  const { data: tasksData, error, mutate } = useSWR('/api/backend/tasks', fetcher)
+  const { data: tasksData, error, mutate } = useSWR<Task[]>('/api/tasks', secureFetcher)
 
-  const tasks: Task[] = tasksData?.data || []
+  const tasks: Task[] = tasksData || []
   const isLoading = !tasksData && !error
 
   const handleStatusUpdate = async (taskId: number, newStatus: 'TODO' | 'IN_PROGRESS' | 'DONE') => {

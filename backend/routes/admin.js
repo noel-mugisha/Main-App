@@ -174,7 +174,7 @@ router.put('/users/:userId/role', requireAdmin, async (req, res) => {
     }
 
     // Prevent admin from changing their own role
-    if (userId === req.auth.id) {
+    if (userId === req.auth.userId) {
       return res.status(400).json({
         success: false,
         error: 'Invalid operation',

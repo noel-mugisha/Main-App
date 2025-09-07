@@ -10,12 +10,15 @@ const { verifyJwt, jwtErrorHandler } = require('./middleware/auth');
 const projectRoutes = require('./routes/projects');
 const taskRoutes = require('./routes/tasks');
 const adminRoutes = require('./routes/admin');
+const { requestLogger } = require('./middleware/logging');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Security middleware
 app.use(helmet());
+// Logging middleware
+app.use(requestLogger);
 
 // Rate limiting
 const limiter = rateLimit({

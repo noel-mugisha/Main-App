@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 // GET /api/tasks - Get tasks for the current user
 router.get('/', async (req, res) => {
   try {
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     let tasks;
@@ -122,7 +122,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     let task;
@@ -239,7 +239,7 @@ router.post('/projects/:projectId/tasks', requireManagerOrAdmin, async (req, res
   try {
     const projectId = parseInt(req.params.projectId);
     const { title, assigneeId } = req.body;
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     if (!title || title.trim() === '') {
@@ -336,7 +336,7 @@ router.put('/:id/status', requireRole(['USER', 'MANAGER', 'ADMIN']), async (req,
   try {
     const taskId = parseInt(req.params.id);
     const { status } = req.body;
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     if (!status || !['TODO', 'IN_PROGRESS', 'DONE'].includes(status)) {
@@ -425,7 +425,7 @@ router.put('/:id/assign', requireManagerOrAdmin, async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
     const { assigneeId } = req.body;
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     // Check if task exists and user has permission
@@ -514,7 +514,7 @@ router.put('/:id/assign', requireManagerOrAdmin, async (req, res) => {
 router.delete('/:id', requireManagerOrAdmin, async (req, res) => {
   try {
     const taskId = parseInt(req.params.id);
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     // Check if task exists and user has permission

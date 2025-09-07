@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 // GET /api/projects - Get projects based on user role
 router.get('/', async (req, res) => {
   try {
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     let projects;
@@ -124,7 +124,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     let project;
@@ -251,7 +251,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', requireManagerOrAdmin, async (req, res) => {
   try {
     const { name, description } = req.body;
-    const managerId = req.auth.id;
+    const managerId = req.auth.userId;
 
     if (!name || name.trim() === '') {
       return res.status(400).json({
@@ -299,7 +299,7 @@ router.put('/:id', requireManagerOrAdmin, async (req, res) => {
   try {
     const projectId = parseInt(req.params.id);
     const { name, description } = req.body;
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     // Check if project exists and user has permission
@@ -371,7 +371,7 @@ router.put('/:id', requireManagerOrAdmin, async (req, res) => {
 router.delete('/:id', requireManagerOrAdmin, async (req, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    const userId = req.auth.id;
+    const userId = req.auth.userId;
     const userRole = req.auth.role;
 
     // Check if project exists and user has permission

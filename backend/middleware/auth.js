@@ -18,7 +18,6 @@ const verifyJwt = jwt({
     jwksRequestsPerMinute: 5,
     jwksUri: process.env.JWKS_URI || 'http://localhost:8080/.well-known/jwks.json'
   }),
-  issuer: process.env.JWT_ISSUER || 'http://localhost:8080',
   algorithms: ['RS256'],
   requestProperty: 'auth',
   getToken: function fromHeaderOrQuerystring(req) {
