@@ -117,6 +117,9 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/projects/assignable-users - List users that can be assigned to tasks (Manager/Admin only)
+// (duplicate removed; route is defined above `/:id`)
+
 // GET /api/projects/:id - Get a single project
 router.get('/:id', async (req, res) => {
   try {
@@ -223,6 +226,104 @@ router.post('/', requireManagerOrAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to create project',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/projects/:projectId/tasks - Create a new task (Manager/Admin only)
+router.post('/:projectId/tasks', requireManagerOrAdmin, async (req, res) => {
+  try {
+    const projectId = parseInt(req.params.projectId);
+    const { title, assigneeId } = req.body;
+    const userId = req.auth.userId;
+    const userRole = req.auth.role;
+
+    if (!title || title.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation error',
+        message: 'Task title is required'
+      });
+    }
+
+    // Check if project exists and user has permission
+    let project;
+    if (userRole === 'ADMIN') {
+      project = await prisma.project.findUnique({
+        where: { id: projectId }
+      });
+    } else {
+      project = await prisma.project.findFirst({
+        where: {
+          id: projectId,
+          managerId: userId
+        }
+      });
+    }
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Project not found',
+        message: 'Project not found or you do not have permission to add tasks to it'
+      });
+    }
+
+    // If assigneeId is provided, verify the user exists
+    if (assigneeId) {
+      const assignee = await prisma.user.findUnique({
+        where: { id: parseInt(assigneeId) }
+      });
+
+      if (!assignee) {
+        return res.status(400).json({
+          success: false,
+          error: 'Validation error',
+          message: 'Assigned user not found'
+        });
+      }
+    }
+
+    const task = await prisma.task.create({
+      data: {
+        title: title.trim(),
+        projectId,
+        assigneeId: assigneeId ? parseInt(assigneeId) : null
+      },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            manager: {
+              select: {
+                id: true,
+                email: true,
+                role: true
+              }
+            }
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      data: task,
+      message: 'Task created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating task:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create task',
       message: error.message
     });
   }
