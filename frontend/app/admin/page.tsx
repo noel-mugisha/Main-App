@@ -7,7 +7,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import api, { apiEndpoints } from '@/lib/api'
+// =========================================================================
+// CHANGE #1: Import the secure `api` client
+// =========================================================================
+import api from '@/lib/api'
+import { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime, getRoleColor } from '@/lib/utils'
 import { Header } from '@/components/layout/Header'
 import { UserRoleDialog } from '@/components/dialogs/UserRoleDialog'
@@ -27,7 +31,20 @@ interface User {
   }
 }
 
-const fetcher = (url: string) => api.get(url).then(res => res.data.data);
+interface UsersApiResponse {
+  users: User[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+// =========================================================================
+// CHANGE #2: Define the secure fetcher using our authenticated `api` client
+// =========================================================================
+const secureAdminUsersFetcher = (url: string) => api.get(url).then(res => res.data.data);
 
 export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -36,13 +53,16 @@ export default function AdminPage() {
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
 
-  const { data: usersData, error, mutate } = useSWR(
+  // =========================================================================
+  // CHANGE #3: Update useSWR to use the secure fetcher and the correct API path
+  // =========================================================================
+  const { data: usersData, error, mutate } = useSWR<UsersApiResponse>(
     `/api/admin/users?page=${currentPage}&limit=10&search=${searchTerm}&role=${roleFilter}`,
-    fetcher
+    secureAdminUsersFetcher
   )
 
-  const users: User[] = usersData?.data?.users || []
-  const pagination = usersData?.data?.pagination
+  const users: User[] = usersData?.users || []
+  const pagination = usersData?.pagination
   const isLoading = !usersData && !error
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
@@ -63,41 +83,45 @@ export default function AdminPage() {
 
   const handleSearch = (value: string) => {
     setSearchTerm(value)
-    setCurrentPage(1) // Reset to first page when searching
+    setCurrentPage(1)
   }
 
   const handleRoleFilter = (value: string) => {
     setRoleFilter(value)
-    setCurrentPage(1) // Reset to first page when filtering
+    setCurrentPage(1)
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex items-center justify-center py-12">
-          <LoadingSpinner size="lg" />
+      <ProtectedRoute>
+        <div className="min-h-screen bg-background">
+          <Header />
+          <div className="flex items-center justify-center py-12">
+            <LoadingSpinner size="lg" />
+          </div>
         </div>
-      </div>
+      </ProtectedRoute>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="container mx-auto py-6">
-          <div className="text-center py-12">
-            <p className="text-destructive">Error loading users. Please try again.</p>
-            <Button asChild className="mt-4">
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
-              </Link>
-            </Button>
+      <ProtectedRoute>
+        <div className="min-h-screen bg-background">
+          <Header />
+          <div className="container mx-auto py-6">
+            <div className="text-center py-12">
+              <p className="text-destructive">Error loading users. Please try again.</p>
+              <Button asChild className="mt-4">
+                <Link href="/dashboard">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Dashboard
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      </ProtectedRoute>
     )
   }
 
@@ -107,7 +131,6 @@ export default function AdminPage() {
         <Header />
         <main className="container mx-auto py-6">
           <div className="space-y-6">
-            {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <Button asChild variant="outline" size="sm">
@@ -125,118 +148,115 @@ export default function AdminPage() {
               </div>
             </div>
 
-          {/* Filters */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search users by email..."
-                      value={searchTerm}
-                      onChange={(e) => handleSearch(e.target.value)}
-                      className="pl-10"
-                    />
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search users by email..."
+                        value={searchTerm}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="sm:w-48">
+                    <select
+                      value={roleFilter}
+                      onChange={(e) => handleRoleFilter(e.target.value)}
+                      className="w-full h-10 px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    >
+                      <option value="">All Roles</option>
+                      <option value="USER">Users</option>
+                      <option value="MANAGER">Managers</option>
+                      <option value="ADMIN">Admins</option>
+                    </select>
                   </div>
                 </div>
-                <div className="sm:w-48">
-                  <select
-                    value={roleFilter}
-                    onChange={(e) => handleRoleFilter(e.target.value)}
-                    className="w-full h-10 px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  >
-                    <option value="">All Roles</option>
-                    <option value="USER">Users</option>
-                    <option value="MANAGER">Managers</option>
-                    <option value="ADMIN">Admins</option>
-                  </select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Users List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Users</CardTitle>
-              <CardDescription>
-                {pagination ? `${pagination.total} total users` : 'Manage user accounts and roles'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {users.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No users found</p>
-                  </div>
-                ) : (
-                  users.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex flex-col">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium">{user.email}</span>
-                            <Badge className={getRoleColor(user.role)}>
-                              {user.role}
-                            </Badge>
-                            {!user.emailVerified && (
-                              <Badge variant="outline" className="text-orange-600 border-orange-200">
-                                Unverified
+            <Card>
+              <CardHeader>
+                <CardTitle>Users</CardTitle>
+                <CardDescription>
+                  {pagination ? `${pagination.total} total users` : 'Manage user accounts and roles'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {users.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No users found for the current filters.</p>
+                    </div>
+                  ) : (
+                    users.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex flex-col">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{user.email}</span>
+                              <Badge className={getRoleColor(user.role)}>
+                                {user.role}
                               </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                            <span>{user._count.projectsOwned} projects</span>
-                            <span>{user._count.tasksAssigned} tasks</span>
-                            <span>Joined {formatRelativeTime(user.createdAt)}</span>
+                              {!user.emailVerified && (
+                                <Badge variant="outline" className="text-orange-600 border-orange-200">
+                                  Unverified
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                              <span>{user._count.projectsOwned} projects</span>
+                              <span>{user._count.tasksAssigned} tasks</span>
+                              <span>Joined {formatRelativeTime(user.createdAt)}</span>
+                            </div>
                           </div>
                         </div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openRoleDialog(user)}
+                          >
+                            <Settings className="h-4 w-4 mr-1" />
+                            Manage
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openRoleDialog(user)}
-                        >
-                          <Settings className="h-4 w-4 mr-1" />
-                          Manage
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Pagination */}
-              {pagination && pagination.pages > 1 && (
-                <div className="flex items-center justify-between mt-6">
-                  <div className="text-sm text-muted-foreground">
-                    Showing {((currentPage - 1) * 10) + 1} to {Math.min(currentPage * 10, pagination.total)} of {pagination.total} users
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
-                      disabled={currentPage === pagination.pages}
-                    >
-                      Next
-                    </Button>
-                  </div>
+                    ))
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+
+                {pagination && pagination.pages > 1 && (
+                  <div className="flex items-center justify-between mt-6">
+                    <div className="text-sm text-muted-foreground">
+                      Showing page {pagination.page} of {pagination.pages}
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
+                        disabled={currentPage === pagination.pages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           <UserRoleDialog
             user={selectedUser}

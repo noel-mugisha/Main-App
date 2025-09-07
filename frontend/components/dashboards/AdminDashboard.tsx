@@ -33,9 +33,10 @@ interface AdminStats {
   }
   usersByRole: Record<string, number>
   tasksByStatus: Record<string, number>
-  recentActivity: any[] 
+  recentActivity: any[]
 }
 
+// This interface describes the full shape of the /api/admin/users response
 interface UsersApiResponse {
   users: User[]
   pagination: any
@@ -49,18 +50,40 @@ export function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false)
 
+  // Use the secure fetchers with SWR, correctly typed
   const { data: usersResponse, error: usersError, mutate: mutateUsers } = useSWR<UsersApiResponse>('/api/admin/users', secureUsersFetcher)
   const { data: statsData, error: statsError } = useSWR<AdminStats>('/api/admin/stats', secureStatsFetcher)
 
+  // Safely destructure the data and provide robust default values
   const users: User[] = usersResponse?.users || []
   const stats: AdminStats = statsData || {
     overview: { totalUsers: 0, totalProjects: 0, totalTasks: 0 },
     usersByRole: {},
     tasksByStatus: {},
-    recentActivity: [] // Ensure recentActivity is always an array
+    recentActivity: []
   }
 
   const isLoading = (!usersResponse && !usersError) || (!statsData && !statsError)
+
+  // Helper function to generate the user role breakdown string
+  const generateUserRoleString = () => {
+    const parts: string[] = [];
+    const roles = stats.usersByRole;
+
+    const pluralize = (count: number, singular: string) => count === 1 ? `${count} ${singular}` : `${count} ${singular}s`;
+
+    if (roles.ADMIN) {
+      parts.push(pluralize(roles.ADMIN, 'admin'));
+    }
+    if (roles.MANAGER) {
+      parts.push(pluralize(roles.MANAGER, 'manager'));
+    }
+    if (roles.USER) {
+      parts.push(pluralize(roles.USER, 'user'));
+    }
+
+    return parts.join(', ');
+  }
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
@@ -123,7 +146,7 @@ export function AdminDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.overview.totalUsers}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.usersByRole.ADMIN || 0} admins, {stats.usersByRole.MANAGER || 0} managers
+              {generateUserRoleString()}
             </p>
           </CardContent>
         </Card>
