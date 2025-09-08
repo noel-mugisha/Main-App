@@ -66,36 +66,28 @@ api.interceptors.response.use(
         
         console.log("Access token expired. Attempting to refresh...");
         
-        // Create a separate, clean axios instance specifically for the token refresh call
         const refreshApi = axios.create({
           baseURL: process.env.IDP_BASE_URL || 'http://localhost:8080',
         });
-
-        // Make the POST request to the IdP's refresh endpoint
         const { data } = await refreshApi.post('/api/auth/refresh-token', {
           refresh_token: refreshToken
         });
         
         console.log("Token refresh successful.");
-        // Store both the new access token and the new refresh token
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('refresh_token', data.refresh_token);
 
-        // Update the default Authorization header for all subsequent `api` calls
         api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
-        // Update the Authorization header of the original request that failed
         originalRequest.headers['Authorization'] = `Bearer ${data.access_token}`;
 
-        // Process any requests that were queued while the token was refreshing
         processQueue(null, data.access_token);
         
-        // Retry the original request with the new token
         return api(originalRequest);
 
       } catch (refreshError) {
         console.error("Token refresh failed:", refreshError);
         processQueue(refreshError as Error, null);
-        useAuthStore.getState().logout(); // If refresh fails, log the user out
+        useAuthStore.getState().logout(); 
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

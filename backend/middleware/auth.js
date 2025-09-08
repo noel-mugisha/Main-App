@@ -65,10 +65,8 @@ const requireRole = (roles) => {
   };
 };
 
-// Manager or Admin authorization
 const requireManagerOrAdmin = requireRole(['MANAGER', 'ADMIN']);
 
-// Admin only authorization
 const requireAdmin = requireRole(['ADMIN']);
 
 module.exports = {
