@@ -308,8 +308,8 @@ const Column = ({
             >
               <p
                 className={cn(
-                  "text-sm transition-colors",
-                  isDraggedOver && canDrop ? "text-primary font-medium" : "text-muted-foreground",
+                  "text-sm transition-all duration-200 font-medium",
+                  isDraggedOver && canDrop ? "text-primary scale-110" : "text-muted-foreground",
                 )}
               >
                 {isDraggedOver && canDrop ? "Drop task here" : "No tasks here"}
