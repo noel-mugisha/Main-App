@@ -12,7 +12,7 @@ import {
   Users, 
   Zap
 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, Variants } from 'framer-motion'
 
 export default function LandingPage() {
   const handleSignIn = () => {
@@ -44,7 +44,7 @@ export default function LandingPage() {
     }
   ]
   
-  const FADE_IN_UP_VARIANTS = {
+  const FADE_IN_UP_VARIANTS : Variants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
   };
