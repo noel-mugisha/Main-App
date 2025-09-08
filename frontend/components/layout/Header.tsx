@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { LogOut, User, Settings, Feather } from 'lucide-react'
 import { getInitials, getRoleColor } from '@/lib/utils'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, Variants } from 'framer-motion'
 import Link from 'next/link'
 import { useState } from 'react'
 
@@ -28,7 +28,7 @@ export function Header() {
 
   if (!user) return null
 
-  const dropdownVariants = {
+  const dropdownVariants : Variants = {
     hidden: { opacity: 0, scale: 0.95, y: -10 },
     visible: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.2, ease: 'easeOut' } },
     exit: { opacity: 0, scale: 0.95, y: -10, transition: { duration: 0.15, ease: 'easeIn' } }
