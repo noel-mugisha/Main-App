@@ -5,12 +5,14 @@ import useSWR from 'swr'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import api, { apiEndpoints } from '@/lib/api'
-import { formatRelativeTime, getRoleColor } from '@/lib/utils'
-import { Users, UserCheck, Settings, BarChart3 } from 'lucide-react'
+import { formatRelativeTime, getInitials, getRoleColor } from '@/lib/utils'
+import { Users, FolderGit2, ListChecks, UserCheck, ArrowRight } from 'lucide-react'
 import { UserRoleDialog } from '@/components/dialogs/UserRoleDialog'
 import Link from 'next/link'
+import { motion, Variants } from 'framer-motion'
+import { Avatar, AvatarFallback } from '../ui/avatar'
+import { Skeleton } from '../ui/skeleton'
 
 // Define interfaces for our data to ensure type safety
 interface User {
@@ -46,15 +48,84 @@ interface UsersApiResponse {
 const secureStatsFetcher = (url: string) => api.get(url).then(res => res.data.data);
 const secureUsersFetcher = (url: string) => api.get(url).then(res => res.data.data);
 
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants : Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      type: 'spring',
+      stiffness: 100
+    }
+  }
+};
+
+// Skeleton Loader Component
+const AdminDashboardSkeleton = () => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between">
+      <div>
+        <Skeleton className="h-9 w-64 mb-2" />
+        <Skeleton className="h-5 w-80" />
+      </div>
+      <Skeleton className="h-10 w-32" />
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {[...Array(4)].map((_, i) => (
+        <Card key={i}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-6 w-6 rounded-full" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-8 w-12 mb-2" />
+            <Skeleton className="h-4 w-32" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-7 w-48 mb-2" />
+        <Skeleton className="h-5 w-64" />
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex items-center space-x-4">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-56" />
+              </div>
+            </div>
+            <Skeleton className="h-9 w-24" />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  </div>
+);
+
 export function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false)
 
   // Use the secure fetchers with SWR, correctly typed
-  const { data: usersResponse, error: usersError, mutate: mutateUsers } = useSWR<UsersApiResponse>('/api/admin/users', secureUsersFetcher)
+  const { data: usersResponse, error: usersError, mutate: mutateUsers } = useSWR<UsersApiResponse>('/api/admin/users?limit=5', secureUsersFetcher)
   const { data: statsData, error: statsError } = useSWR<AdminStats>('/api/admin/stats', secureStatsFetcher)
 
-  // Safely destructure the data and provide robust default values
   const users: User[] = usersResponse?.users || []
   const stats: AdminStats = statsData || {
     overview: { totalUsers: 0, totalProjects: 0, totalTasks: 0 },
@@ -64,26 +135,6 @@ export function AdminDashboard() {
   }
 
   const isLoading = (!usersResponse && !usersError) || (!statsData && !statsError)
-
-  // Helper function to generate the user role breakdown string
-  const generateUserRoleString = () => {
-    const parts: string[] = [];
-    const roles = stats.usersByRole;
-
-    const pluralize = (count: number, singular: string) => count === 1 ? `${count} ${singular}` : `${count} ${singular}s`;
-
-    if (roles.ADMIN) {
-      parts.push(pluralize(roles.ADMIN, 'admin'));
-    }
-    if (roles.MANAGER) {
-      parts.push(pluralize(roles.MANAGER, 'manager'));
-    }
-    if (roles.USER) {
-      parts.push(pluralize(roles.USER, 'user'));
-    }
-
-    return parts.join(', ');
-  }
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
@@ -100,13 +151,29 @@ export function AdminDashboard() {
     setSelectedUser(user)
     setIsRoleDialogOpen(true)
   }
+  
+  const StatCard = ({ title, value, description, icon, gradient }: { title: string, value: string | number, description?: string, icon: React.ReactNode, gradient: string }) => (
+    <motion.div variants={itemVariants}>
+      <Card className="overflow-hidden shadow-sm hover:shadow-lg transition-shadow duration-300">
+        <div className={`p-6 flex flex-col justify-between h-full ${gradient} text-white`}>
+          <div className="flex justify-between items-start">
+            <CardTitle className="text-sm font-medium text-white/90">{title}</CardTitle>
+            <div className="p-2 bg-white/20 rounded-lg">
+              {icon}
+            </div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold">{value}</div>
+            {description && <p className="text-xs text-white/80">{description}</p>}
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  );
+
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner size="lg" />
-      </div>
-    )
+    return <AdminDashboardSkeleton />;
   }
 
   if (usersError || statsError) {
@@ -118,162 +185,115 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <motion.div 
+      className="space-y-8"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
+      <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
           <p className="text-muted-foreground">
-            Manage users, monitor system activity, and oversee all projects
+            Oversee system-wide activity, manage users, and monitor all projects.
           </p>
         </div>
-        <div className="flex space-x-2">
-          <Button asChild variant="outline">
-            <Link href="/admin">
-              <Settings className="h-4 w-4 mr-2" />
-              Admin Panel
-            </Link>
-          </Button>
-        </div>
-      </div>
+        <Button asChild>
+          <Link href="/admin">
+            Full User Management
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Link>
+        </Button>
+      </motion.div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.overview.totalUsers}</div>
-            <p className="text-xs text-muted-foreground">
-              {generateUserRoleString()}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.overview.totalProjects}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.overview.totalTasks}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.tasksByStatus.DONE || 0} completed
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Verified Users</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(user => user.emailVerified).length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              of {users.length} total users
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <motion.div 
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        variants={containerVariants}
+      >
+        <StatCard title="Total Users" value={stats.overview.totalUsers} description={`${stats.usersByRole.ADMIN || 0} Admins, ${stats.usersByRole.MANAGER || 0} Managers`} icon={<Users className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-indigo-500 to-blue-500" />
+        <StatCard title="Total Projects" value={stats.overview.totalProjects} description="Across all managers" icon={<FolderGit2 className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-purple-500 to-pink-500" />
+        <StatCard title="Total Tasks" value={stats.overview.totalTasks} description={`${stats.tasksByStatus.DONE || 0} completed`} icon={<ListChecks className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-emerald-500 to-green-500" />
+        <StatCard title="Verified Users" value={users.filter(user => user.emailVerified).length} description={`of ${stats.overview.totalUsers} total users`} icon={<UserCheck className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-amber-500 to-orange-500" />
+      </motion.div>
 
-      {/* Recent Users */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Users</CardTitle>
-          <CardDescription>
-            Latest user registrations and their current status
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {users.slice(0, 5).map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="flex flex-col">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium">{user.email}</span>
-                      <Badge className={getRoleColor(user.role)}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Users */}
+        <motion.div variants={itemVariants} className="lg:col-span-2">
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>Recently Active Users</CardTitle>
+              <CardDescription>
+                Users who have recently joined or been active.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {users.map((user) => (
+                  <motion.div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 -mx-3 rounded-lg hover:bg-muted/50 transition-colors"
+                    whileHover={{ scale: 1.02 }}
+                  >
+                    <div className="flex items-center space-x-4">
+                      <Avatar>
+                        <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex flex-col">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-medium">{user.email}</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">Joined {formatRelativeTime(user.createdAt)}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <Badge className={getRoleColor(user.role)} variant="secondary">
                         {user.role}
                       </Badge>
-                      {!user.emailVerified && (
-                        <Badge variant="outline" className="text-orange-600 border-orange-200">
-                          Unverified
-                        </Badge>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openRoleDialog(user)}
+                      >
+                        Manage
+                      </Button>
                     </div>
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                      <span>{user._count.projectsOwned} projects</span>
-                      <span>{user._count.tasksAssigned} tasks</span>
-                      <span>Joined {formatRelativeTime(user.createdAt)}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => openRoleDialog(user)}
-                  >
-                    <Settings className="h-4 w-4 mr-1" />
-                    Manage
-                  </Button>
-                </div>
+                  </motion.div>
+                ))}
               </div>
-            ))}
-          </div>
-          {users.length > 5 && (
-            <div className="mt-4 text-center">
-              <Button asChild variant="outline">
-                <Link href="/admin">
-                  View All Users
-                </Link>
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
 
-      {/* System Activity */}
-      {stats.recentActivity && stats.recentActivity.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>
-              Latest task updates across the system
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {stats.recentActivity.slice(0, 5).map((activity, index) => (
-                <div key={index} className="flex items-center space-x-3 p-3 border rounded-lg">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">
-                      Task "{activity.title}" updated to {activity.status}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      In Project: {activity.project?.name} • By: {activity.assignee?.email || 'System'} • {formatRelativeTime(activity.updatedAt)}
-                    </p>
+        {/* System Activity */}
+        <motion.div variants={itemVariants}>
+          <Card className="h-full">
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>
+                Latest task updates across the system.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {stats.recentActivity.slice(0, 5).map((activity, index) => (
+                  <div key={index} className="flex items-start space-x-3">
+                    <div className="w-1 h-full bg-border rounded-full mt-1" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium leading-tight">
+                        Task "{activity.title}" in <span className="font-semibold text-primary">{activity.project?.name}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Status changed to {activity.status} • {formatRelativeTime(activity.updatedAt)}
+                      </p>
+                    </div>
                   </div>
-                  <Badge variant="outline">
-                    {activity.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
 
       <UserRoleDialog
         user={selectedUser}
@@ -284,6 +304,6 @@ export function AdminDashboard() {
         }}
         onRoleUpdate={handleRoleUpdate}
       />
-    </div>
+    </motion.div>
   )
 }
