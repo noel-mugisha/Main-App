@@ -57,7 +57,7 @@ const createAuthRefreshInterceptor = (axiosInstance: AxiosInstance) => async (er
         console.log("Access token expired. Attempting to refresh...");
         
         const refreshApi = axios.create({
-          baseURL: process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080',
+          baseURL:  process.env.NEXT_IDP_BASE_URL || 'http://localhost:8080',
         });
         const { data } = await refreshApi.post('/api/auth/refresh-token', {
           refresh_token: refreshToken
