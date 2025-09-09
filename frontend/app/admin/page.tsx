@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import api from '@/lib/api'
+import api, {apiEndpoints} from '@/lib/api'
 import { formatRelativeTime, getRoleColor, getInitials } from '@/lib/utils'
 import { Header } from '@/components/layout/Header'
 import { UserRoleDialog } from '@/components/dialogs/UserRoleDialog'
@@ -112,7 +112,7 @@ export default function AdminPage() {
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
-      await api.put(`/api/admin/users/${userId}/role`, { role: newRole })
+      await apiEndpoints.updateUserRoleInIdP(userId, newRole);
       mutate() // Refresh data
       setIsRoleDialogOpen(false)
       setSelectedUser(null)

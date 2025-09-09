@@ -107,9 +107,7 @@ A comprehensive project management application built with Next.js frontend and N
    ```
    Update `.env` with your database URL and IdP configuration:
    ```
-   DATABASE_URL="postgresql://username:password@localhost:5432/idp_app_db"
-   JWT_ISSUER="http://localhost:8080"
-   JWKS_URI="http://localhost:8080/.well-known/jwks.json"
+   DATABASE_URL="postgresql://username:password@localhost:5432/idp_app_db""
    PORT=3001
    FRONTEND_URL="http://localhost:3000"
    ```

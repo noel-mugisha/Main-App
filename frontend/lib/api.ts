@@ -1,29 +1,9 @@
-import axios from 'axios';
+import axios, { AxiosError, type AxiosInstance } from 'axios';
 import { useAuthStore } from './store';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-api.interceptors.request.use(
-  (config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
+// ===================================================================
+// == Reusable Token Refresh Logic (Factory Function)
+// ===================================================================
 let isRefreshing = false;
 let failedQueue: { resolve: (value: unknown) => void; reject: (reason?: any) => void }[] = [];
 
@@ -38,22 +18,32 @@ const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue = [];
 };
 
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
+/**
+ * Creates a reusable Axios interceptor for handling 401 errors and refreshing auth tokens.
+ * @param axiosInstance The specific Axios instance to attach the interceptor to.
+ */
+const createAuthRefreshInterceptor = (axiosInstance: AxiosInstance) => async (error: AxiosError) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Ensure originalRequest is not undefined
+    if (!originalRequest) {
+        return Promise.reject(error);
+    }
+
+    // Check for 401 error and that this is not a retry request
+    if (error.response?.status === 401 && !(originalRequest as any)._retry) {
       if (isRefreshing) {
         return new Promise(function(resolve, reject) {
           failedQueue.push({ resolve, reject });
         }).then(token => {
-          originalRequest.headers['Authorization'] = 'Bearer ' + token;
-          return api(originalRequest);
+          if (originalRequest.headers) {
+            originalRequest.headers['Authorization'] = 'Bearer ' + token;
+          }
+          return axiosInstance(originalRequest);
         });
       }
 
-      originalRequest._retry = true;
+      (originalRequest as any)._retry = true;
       isRefreshing = true;
 
       try {
@@ -67,7 +57,7 @@ api.interceptors.response.use(
         console.log("Access token expired. Attempting to refresh...");
         
         const refreshApi = axios.create({
-          baseURL: process.env.IDP_BASE_URL || 'http://localhost:8080',
+          baseURL: process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080',
         });
         const { data } = await refreshApi.post('/api/auth/refresh-token', {
           refresh_token: refreshToken
@@ -77,12 +67,14 @@ api.interceptors.response.use(
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('refresh_token', data.refresh_token);
 
-        api.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
-        originalRequest.headers['Authorization'] = `Bearer ${data.access_token}`;
-
+        axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
+        if (originalRequest.headers) {
+            originalRequest.headers['Authorization'] = `Bearer ${data.access_token}`;
+        }
+        
         processQueue(null, data.access_token);
         
-        return api(originalRequest);
+        return axiosInstance(originalRequest);
 
       } catch (refreshError) {
         console.error("Token refresh failed:", refreshError);
@@ -95,19 +87,71 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+};
+
+
+// ===================================================================
+// == Axios Instance for Your MAIN APP Backend
+// ===================================================================
+const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+api.interceptors.request.use(
+  (config) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
 );
 
-// The apiEndpoints export remains the same
+// Apply the reusable interceptor to the main 'api' instance
+api.interceptors.response.use((response) => response, createAuthRefreshInterceptor(api));
+
+
+// ===================================================================
+// == Axios Instance for Your IdP Backend
+// ===================================================================
+const IDP_BASE_URL = process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080';
+const idpApi = axios.create({
+  baseURL: IDP_BASE_URL,
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+idpApi.interceptors.request.use(
+  (config) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Apply the same reusable interceptor to the 'idpApi' instance
+idpApi.interceptors.response.use((response) => response, createAuthRefreshInterceptor(idpApi));
+
+
+// ===================================================================
+// == apiEndpoints Export
+// ===================================================================
 export const apiEndpoints = {
-  // Projects
+  // --- Projects (via Main App Backend) ---
   getProjects: () => api.get('/api/projects'),
   getProject: (id: number) => api.get(`/api/projects/${id}`),
   createProject: (data: { name: string; description?: string }) => api.post('/api/projects', data),
   updateProject: (id: number, data: { name?: string; description?: string }) => api.put(`/api/projects/${id}`, data),
   deleteProject: (id: number) => api.delete(`/api/projects/${id}`),
 
-  // Tasks
+  // --- Tasks (via Main App Backend) ---
   getTasks: () => api.get('/api/tasks'),
   getTask: (id: number) => api.get(`/api/tasks/${id}`),
   createTask: (projectId: number, data: { title: string; assigneeId?: number }) => 
@@ -118,13 +162,15 @@ export const apiEndpoints = {
     api.put(`/api/tasks/${id}/assign`, { assigneeId }),
   deleteTask: (id: number) => api.delete(`/api/tasks/${id}`),
 
-  // Admin
+  // --- Admin (via Main App Backend) ---
   getUsers: (params?: { page?: number; limit?: number; search?: string; role?: string }) => 
     api.get('/api/admin/users', { params }),
   getUser: (userId: number) => api.get(`/api/admin/users/${userId}`),
-  updateUserRole: (userId: number, role: 'USER' | 'MANAGER' | 'ADMIN') => 
-    api.put(`/api/admin/users/${userId}/role`, { role }),
   getAdminStats: () => api.get('/api/admin/stats'),
+
+  // --- Admin Role Update (via IdP Backend) ---
+  updateUserRoleInIdP: (userId: number, role: 'USER' | 'MANAGER' | 'ADMIN') => 
+    idpApi.put(`/api/admin/users/${userId}/role`, { role }),
 };
 
 export default api;

@@ -44,6 +44,12 @@ interface UsersApiResponse {
   pagination: any
 }
 
+// Helper function to pluralize words correctly
+const pluralize = (count: number, singular: string, plural?: string) => {
+  if (count === 1) return `${count} ${singular}`
+  return `${count} ${plural || singular + 's'}`
+}
+
 // Define secure fetchers that use our authenticated client
 const secureStatsFetcher = (url: string) => api.get(url).then(res => res.data.data);
 const secureUsersFetcher = (url: string) => api.get(url).then(res => res.data.data);
@@ -138,7 +144,7 @@ export function AdminDashboard() {
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
-      await apiEndpoints.updateUserRole(userId, newRole)
+      await apiEndpoints.updateUserRoleInIdP(userId, newRole);
       mutateUsers()
       setIsRoleDialogOpen(false)
       setSelectedUser(null)
@@ -211,10 +217,38 @@ export function AdminDashboard() {
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
         variants={containerVariants}
       >
-        <StatCard title="Total Users" value={stats.overview.totalUsers} description={`${stats.usersByRole.ADMIN || 0} Admins, ${stats.usersByRole.MANAGER || 0} Managers`} icon={<Users className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-indigo-500 to-blue-500" />
-        <StatCard title="Total Projects" value={stats.overview.totalProjects} description="Across all managers" icon={<FolderGit2 className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-purple-500 to-pink-500" />
-        <StatCard title="Total Tasks" value={stats.overview.totalTasks} description={`${stats.tasksByStatus.DONE || 0} completed`} icon={<ListChecks className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-emerald-500 to-green-500" />
-        <StatCard title="Verified Users" value={users.filter(user => user.emailVerified).length} description={`of ${stats.overview.totalUsers} total users`} icon={<UserCheck className="h-5 w-5 text-white" />} gradient="bg-gradient-to-br from-amber-500 to-orange-500" />
+        <StatCard 
+          title="Total Users" 
+          value={stats.overview.totalUsers} 
+          description={[
+            stats.usersByRole.ADMIN ? pluralize(stats.usersByRole.ADMIN, 'Admin') : '',
+            stats.usersByRole.MANAGER ? pluralize(stats.usersByRole.MANAGER, 'Manager') : '',
+            stats.usersByRole.USER ? pluralize(stats.usersByRole.USER, 'User') : ''
+          ].filter(Boolean).join(', ')} 
+          icon={<Users className="h-5 w-5 text-white" />} 
+          gradient="bg-gradient-to-br from-indigo-500 to-blue-500" 
+        />
+        <StatCard 
+          title="Total Projects" 
+          value={stats.overview.totalProjects} 
+          description="Across all managers" 
+          icon={<FolderGit2 className="h-5 w-5 text-white" />} 
+          gradient="bg-gradient-to-br from-purple-500 to-pink-500" 
+        />
+        <StatCard 
+          title="Total Tasks" 
+          value={stats.overview.totalTasks} 
+          description={`${stats.tasksByStatus.DONE || 0} completed`} 
+          icon={<ListChecks className="h-5 w-5 text-white" />} 
+          gradient="bg-gradient-to-br from-emerald-500 to-green-500" 
+        />
+        <StatCard 
+          title="Verified Users" 
+          value={users.filter(user => user.emailVerified).length} 
+          description={`of ${stats.overview.totalUsers} total users`} 
+          icon={<UserCheck className="h-5 w-5 text-white" />} 
+          gradient="bg-gradient-to-br from-amber-500 to-orange-500" 
+        />
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
