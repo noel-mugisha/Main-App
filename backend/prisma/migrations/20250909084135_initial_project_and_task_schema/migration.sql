@@ -1,7 +1,4 @@
 -- CreateEnum
-CREATE TYPE "Role" AS ENUM ('USER', 'MANAGER', 'ADMIN');
-
--- CreateEnum
 CREATE TYPE "TaskStatus" AS ENUM ('TODO', 'IN_PROGRESS', 'DONE');
 
 -- CreateTable
@@ -9,7 +6,7 @@ CREATE TABLE "users" (
     "id" SERIAL NOT NULL,
     "email" TEXT NOT NULL,
     "password" TEXT,
-    "role" "Role" NOT NULL,
+    "role" TEXT NOT NULL,
     "email_verified" BOOLEAN NOT NULL DEFAULT false,
     "linkedin_id" TEXT,
     "otp" TEXT,

@@ -16,7 +16,7 @@ model User {
   id              Int       @id @default(autoincrement())
   email           String    @unique
   password        String?
-  role            Role      // Role enum defined below
+  role            String      // Role enum defined below
   emailVerified   Boolean   @default(false) @map("email_verified")
   linkedinId      String?   @unique @map("linkedin_id")
   otp             String?
@@ -53,12 +53,6 @@ model Task {
   assignee    User?    @relation("AssignedTasks", fields: [assigneeId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-}
-
-enum Role {
-  USER
-  MANAGER
-  ADMIN
 }
 
 enum TaskStatus {
