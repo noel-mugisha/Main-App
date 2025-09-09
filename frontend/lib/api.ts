@@ -2,16 +2,26 @@ import axios, { AxiosError, type AxiosInstance } from 'axios';
 import { useAuthStore } from './store';
 
 // ===================================================================
-// == Reusable Token Refresh Logic (Factory Function)
+// == Reusable Token Refresh Logic
 // ===================================================================
+
+// A flag to prevent multiple token refresh requests from firing simultaneously.
 let isRefreshing = false;
+// A queue to hold requests that failed with a 401 error while the token is being refreshed.
 let failedQueue: { resolve: (value: unknown) => void; reject: (reason?: any) => void }[] = [];
 
+/**
+ * Processes the queue of failed requests after a token refresh attempt.
+ * @param error An error object if the refresh failed, otherwise null.
+ * @param token The new access token if the refresh was successful.
+ */
 const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue.forEach(prom => {
     if (error) {
+      // If the refresh failed, reject all queued requests.
       prom.reject(error);
     } else {
+      // If the refresh succeeded, resolve all queued requests with the new token.
       prom.resolve(token);
     }
   });
@@ -19,20 +29,21 @@ const processQueue = (error: Error | null, token: string | null = null) => {
 };
 
 /**
- * Creates a reusable Axios interceptor for handling 401 errors and refreshing auth tokens.
+ * Creates a reusable Axios interceptor to handle 401 Unauthorized errors.
+ * When a 401 is received, it attempts to refresh the access token and then retries the original request.
  * @param axiosInstance The specific Axios instance to attach the interceptor to.
  */
 const createAuthRefreshInterceptor = (axiosInstance: AxiosInstance) => async (error: AxiosError) => {
     const originalRequest = error.config;
 
-    // Ensure originalRequest is not undefined
     if (!originalRequest) {
         return Promise.reject(error);
     }
 
-    // Check for 401 error and that this is not a retry request
+    // Intercept only 401 errors. The `_retry` flag prevents an infinite loop for the same request.
     if (error.response?.status === 401 && !(originalRequest as any)._retry) {
       if (isRefreshing) {
+        // If a refresh is already in progress, queue this request.
         return new Promise(function(resolve, reject) {
           failedQueue.push({ resolve, reject });
         }).then(token => {
@@ -56,9 +67,12 @@ const createAuthRefreshInterceptor = (axiosInstance: AxiosInstance) => async (er
         
         console.log("Access token expired. Attempting to refresh...");
         
+        // Create a temporary, clean axios instance specifically for the refresh call.
+        // This avoids the new request being caught by the same interceptor.
         const refreshApi = axios.create({
-          baseURL:  process.env.NEXT_IDP_BASE_URL || 'http://localhost:8080',
+          baseURL:  process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080',
         });
+
         const { data } = await refreshApi.post('/api/auth/refresh-token', {
           refresh_token: refreshToken
         });
@@ -67,19 +81,23 @@ const createAuthRefreshInterceptor = (axiosInstance: AxiosInstance) => async (er
         localStorage.setItem('access_token', data.access_token);
         localStorage.setItem('refresh_token', data.refresh_token);
 
+        // Update the default headers for subsequent requests.
         axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
+        // Update the header of the original failed request.
         if (originalRequest.headers) {
             originalRequest.headers['Authorization'] = `Bearer ${data.access_token}`;
         }
         
+        // Process the queue with the new token.
         processQueue(null, data.access_token);
         
+        // Retry the original request with the new token.
         return axiosInstance(originalRequest);
 
       } catch (refreshError) {
         console.error("Token refresh failed:", refreshError);
         processQueue(refreshError as Error, null);
-        useAuthStore.getState().logout(); 
+        useAuthStore.getState().logout(); // Logout the user if refresh fails.
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -91,15 +109,19 @@ const createAuthRefreshInterceptor = (axiosInstance: AxiosInstance) => async (er
 
 
 // ===================================================================
-// == Axios Instance for Your MAIN APP Backend
+// == Main Axios Instance for Your Application Backend
 // ===================================================================
 const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
+// This is the primary axios instance that should be used for all calls
+// to your main application's backend (the Node.js server).
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Request Interceptor: Attaches the JWT access token to every outgoing request.
 api.interceptors.request.use(
   (config) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
@@ -111,38 +133,15 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Apply the reusable interceptor to the main 'api' instance
+// Response Interceptor: Applies the token refresh logic to handle expired tokens automatically.
 api.interceptors.response.use((response) => response, createAuthRefreshInterceptor(api));
 
 
 // ===================================================================
-// == Axios Instance for Your IdP Backend
+// == Centralized API Endpoints
 // ===================================================================
-const IDP_BASE_URL = process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080';
-const idpApi = axios.create({
-  baseURL: IDP_BASE_URL,
-  timeout: 10000,
-  headers: { 'Content-Type': 'application/json' },
-});
 
-idpApi.interceptors.request.use(
-  (config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Apply the same reusable interceptor to the 'idpApi' instance
-idpApi.interceptors.response.use((response) => response, createAuthRefreshInterceptor(idpApi));
-
-
-// ===================================================================
-// == apiEndpoints Export
-// ===================================================================
+// This object provides a clean, reusable interface for all API calls in the application.
 export const apiEndpoints = {
   // --- Projects (via Main App Backend) ---
   getProjects: () => api.get('/api/projects'),
@@ -168,9 +167,12 @@ export const apiEndpoints = {
   getUser: (userId: number) => api.get(`/api/admin/users/${userId}`),
   getAdminStats: () => api.get('/api/admin/stats'),
 
-  // --- Admin Role Update (via IdP Backend) ---
-  updateUserRoleInIdP: (userId: number, role: 'USER' | 'MANAGER' | 'ADMIN') => 
-    idpApi.put(`/api/admin/users/${userId}/role`, { role }),
+  // --- Admin Role Update (via Main App Backend PROXY) ---
+  // CORRECTED: This now uses the main 'api' instance to call your backend's proxy endpoint.
+  // Your backend will then forward this request to the IdP and update its own database,
+  // keeping everything in sync.
+  updateUserRole: (userId: number, role: 'USER' | 'MANAGER' | 'ADMIN') => 
+    api.put(`/api/admin/users/${userId}/role`, { role }),
 };
 
 export default api;

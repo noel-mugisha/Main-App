@@ -144,7 +144,7 @@ export function AdminDashboard() {
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
-      await apiEndpoints.updateUserRoleInIdP(userId, newRole);
+      await apiEndpoints.updateUserRole(userId, newRole);
       mutateUsers()
       setIsRoleDialogOpen(false)
       setSelectedUser(null)

@@ -112,7 +112,7 @@ export default function AdminPage() {
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
-      await apiEndpoints.updateUserRoleInIdP(userId, newRole);
+      await apiEndpoints.updateUserRole(userId, newRole);
       mutate() // Refresh data
       setIsRoleDialogOpen(false)
       setSelectedUser(null)
