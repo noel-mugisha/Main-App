@@ -1,5 +1,3 @@
-// File: backend/middleware/userSync.js
-
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -9,28 +7,25 @@ const syncUser = async (req, res, next) => {
   }
 
   const { userId, sub: email, role } = req.auth;
-  const emailVerified = true;
 
   try {
-    const now = new Date();
     await prisma.user.upsert({
       where: { id: userId },
       update: {
-        email,
-        role,
-        emailVerified,
+        email: email,
       },
       create: {
         id: userId,
-        email,
-        role,
-        emailVerified,
-        createdAt: now,
+        email: email,
+        role: role,
+        emailVerified: true,
+        createdAt: new Date(),
       },
     });
+    
     next();
   } catch (error) {
-    console.error('Failed to sync user to local database:', error);
+    console.error(`Failed to sync user ${userId} to local database:`, error);
     next();
   }
 };

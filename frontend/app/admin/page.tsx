@@ -6,12 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import api, {apiEndpoints} from '@/lib/api'
+import api, { apiEndpoints } from '@/lib/api'
 import { formatRelativeTime, getRoleColor, getInitials } from '@/lib/utils'
 import { Header } from '@/components/layout/Header'
 import { UserRoleDialog } from '@/components/dialogs/UserRoleDialog'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
-import { Search, ArrowLeft, UserPlus, Users } from 'lucide-react'
+import { Search, ArrowLeft, Users, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -52,6 +52,8 @@ const UserManagementSkeleton = () => (
           <Skeleton className="h-5 w-80" />
         </div>
       </div>
+      {/* Skeleton for the sync button */}
+      <Skeleton className="h-10 w-36" />
     </div>
     <Card>
       <CardContent className="pt-6">
@@ -86,6 +88,7 @@ const UserManagementSkeleton = () => (
   </div>
 );
 
+// --- MAIN PAGE COMPONENT ---
 export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
@@ -93,27 +96,23 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [isSyncing, setIsSyncing] = useState(false); 
 
   useEffect(() => {
     const timerId = setTimeout(() => {
       setDebouncedSearchTerm(searchTerm)
-      setCurrentPage(1); // Reset page on new search
+      setCurrentPage(1);
     }, 500)
     return () => clearTimeout(timerId)
-  }, [searchTerm])
+  }, [searchTerm]);
 
-  const { data: usersData, error, mutate, isLoading } = useSWR<UsersApiResponse>(
-    `/api/admin/users?page=${currentPage}&limit=10&search=${debouncedSearchTerm}&role=${roleFilter}`,
-    secureAdminUsersFetcher
-  )
-
-  const users: User[] = usersData?.users || []
-  const pagination = usersData?.pagination
+  const swrKey = `/api/admin/users?page=${currentPage}&limit=10&search=${debouncedSearchTerm}&role=${roleFilter}`;
+  const { data: usersData, error, mutate, isLoading } = useSWR<UsersApiResponse>(swrKey, secureAdminUsersFetcher);
 
   const handleRoleUpdate = async (userId: number, newRole: 'USER' | 'MANAGER' | 'ADMIN') => {
     try {
       await apiEndpoints.updateUserRole(userId, newRole);
-      mutate() // Refresh data
+      mutate();
       setIsRoleDialogOpen(false)
       setSelectedUser(null)
     } catch (error) {
@@ -121,30 +120,30 @@ export default function AdminPage() {
     }
   }
 
+  const handleSync = async () => {
+      setIsSyncing(true);
+      try {
+          await apiEndpoints.syncUsers();
+          mutate(); 
+      } catch (error) {
+          console.error('Failed to sync with IdP:', error);
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
   const openRoleDialog = (user: User) => {
     setSelectedUser(user)
     setIsRoleDialogOpen(true)
   }
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
-  };
-  
-  const itemVariants = {
-    hidden: { opacity: 0, y: 10 },
-    visible: { opacity: 1, y: 0 },
-  };
+  const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.05 } } };
+  const itemVariants = { hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } };
 
-  if (isLoading) {
+  if (isLoading || isSyncing) { 
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-background">
-          <Header />
-          <main className="container mx-auto py-8">
-            <UserManagementSkeleton />
-          </main>
-        </div>
+        <div className="min-h-screen bg-background"><Header /><main className="container mx-auto py-8"><UserManagementSkeleton /></main></div>
       </ProtectedRoute>
     )
   }
@@ -152,12 +151,7 @@ export default function AdminPage() {
   if (error) {
     return (
       <ProtectedRoute>
-        <div className="min-h-screen bg-background">
-          <Header />
-          <main className="container mx-auto py-6 text-center">
-            <p className="text-destructive">Error loading users. Please try again.</p>
-          </main>
-        </div>
+        <div className="min-h-screen bg-background"><Header /><main className="container mx-auto py-6 text-center"><p className="text-destructive">Error loading users. Please try again.</p></main></div>
       </ProtectedRoute>
     )
   }
@@ -167,27 +161,19 @@ export default function AdminPage() {
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container mx-auto py-8">
-          <motion.div 
-            className="space-y-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="flex items-center justify-between">
+          <motion.div className="space-y-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center space-x-4">
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/dashboard">
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back
-                  </Link>
-                </Button>
+                <Button asChild variant="outline" size="sm"><Link href="/dashboard"><ArrowLeft className="h-4 w-4 mr-2" />Back</Link></Button>
                 <div>
                   <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-                  <p className="text-muted-foreground">
-                    View, manage, and assign roles to all users in the system.
-                  </p>
+                  <p className="text-muted-foreground">Manage roles and synchronize the database with the IdP.</p>
                 </div>
               </div>
+              <Button onClick={handleSync} disabled={isSyncing}>
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Syncing...' : 'Sync with IdP'}
+              </Button>
             </div>
 
             <Card>
@@ -195,12 +181,7 @@ export default function AdminPage() {
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by email..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+                    <Input placeholder="Search by email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10"/>
                   </div>
                   <select
                     value={roleFilter}
@@ -220,7 +201,7 @@ export default function AdminPage() {
               <CardHeader>
                 <CardTitle>User List</CardTitle>
                 <CardDescription>
-                  {pagination ? `${pagination.total} total users found` : 'Manage user accounts and roles'}
+                  {usersData?.pagination ? `Displaying ${usersData.users.length} of ${usersData.pagination.total} total users` : 'Manage user accounts and roles'}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -235,36 +216,26 @@ export default function AdminPage() {
                     </TableRow>
                   </TableHeader>
                   <motion.tbody variants={containerVariants} initial="hidden" animate="visible">
-                    {users.length > 0 ? (
-                      users.map((user) => (
+                    {usersData?.users && usersData.users.length > 0 ? (
+                      usersData.users.map((user) => (
                         <motion.tr key={user.id} variants={itemVariants} className="hover:bg-muted/50 transition-colors">
                           <TableCell>
                             <div className="flex items-center space-x-3">
-                              <Avatar>
-                                <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
-                              </Avatar>
+                              <Avatar><AvatarFallback>{getInitials(user.email)}</AvatarFallback></Avatar>
                               <div>
                                 <div className="font-medium">{user.email}</div>
                                 {!user.emailVerified && <div className="text-xs text-amber-600">Unverified</div>}
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge className={getRoleColor(user.role)}>{user.role}</Badge>
-                          </TableCell>
+                          <TableCell><Badge className={getRoleColor(user.role)}>{user.role}</Badge></TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             <div>{user._count.projectsOwned} Projects</div>
                             <div>{user._count.tasksAssigned} Tasks</div>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">{formatRelativeTime(user.createdAt)}</TableCell>
                           <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openRoleDialog(user)}
-                            >
-                              Manage Role
-                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => openRoleDialog(user)}>Manage Role</Button>
                           </TableCell>
                         </motion.tr>
                       ))
@@ -279,14 +250,14 @@ export default function AdminPage() {
                   </motion.tbody>
                 </Table>
 
-                {pagination && pagination.pages > 1 && (
+                {usersData?.pagination && usersData.pagination.pages > 1 && (
                   <div className="flex items-center justify-between mt-6">
                     <div className="text-sm text-muted-foreground">
-                      Page {pagination.page} of {pagination.pages}
+                      Page {usersData.pagination.page} of {usersData.pagination.pages}
                     </div>
                     <div className="flex space-x-2">
                       <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Previous</Button>
-                      <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(pagination.pages, p + 1))} disabled={currentPage === pagination.pages}>Next</Button>
+                      <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(usersData.pagination.pages, p + 1))} disabled={currentPage === usersData.pagination.pages}>Next</Button>
                     </div>
                   </div>
                 )}

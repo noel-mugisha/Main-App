@@ -173,6 +173,7 @@ export const apiEndpoints = {
   // keeping everything in sync.
   updateUserRole: (userId: number, role: 'USER' | 'MANAGER' | 'ADMIN') => 
     api.put(`/api/admin/users/${userId}/role`, { role }),
+   syncUsers: () => api.get('/api/admin/sync-users'),
 };
 
 export default api;
