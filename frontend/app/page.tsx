@@ -16,7 +16,6 @@ import { motion, Variants } from 'framer-motion'
 
 export default function LandingPage() {
   const handleSignIn = () => {
-    // Redirect to IdP - functionality remains unchanged
     const idpUrl = process.env.NEXT_PUBLIC_IDP_URL || 'http://localhost:8080'
     window.location.href = idpUrl
   }
